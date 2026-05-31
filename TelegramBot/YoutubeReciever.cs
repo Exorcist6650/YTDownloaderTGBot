@@ -7,8 +7,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
 using YoutubeExplode;
-using YoutubeExplode.Common;
 using YoutubeExplode.Exceptions;
+using YoutubeExplode.Common;
 
 namespace YoutubeConnect
 {
@@ -21,13 +21,15 @@ namespace YoutubeConnect
         public TimeSpan Duration { get; set; }
 
         public string Description { get; set; }
-    
+        public string Id { get; set; }
+
         public IEnumerator GetEnumerator()
         {
             yield return Title;
             yield return Channel;
             yield return Duration;
             yield return Description;
+            yield return Id;
         }
     }
 
@@ -57,6 +59,7 @@ namespace YoutubeConnect
                     Channel = video?.Author?.ChannelTitle ?? "",
                     Duration = video?.Duration.Value ?? TimeSpan.Zero,
                     Description = video?.Description.Length > 100 ? video.Description.Substring(0, 100) : video.Description ?? "",
+                    Id = video.Id,
                 };
             }
             catch (PlaylistUnavailableException)
@@ -98,6 +101,36 @@ namespace YoutubeConnect
             }
             catch
             {
+                return null;
+            }
+        }
+
+        public async Task<FileStream?> GetVideoMuxedStreamAsync(string url)
+        {
+            try
+            {
+                // Get manifest 
+                var manifest = await _youtube.Videos.Streams.GetManifestAsync(url);
+                // Select high quality
+                var streamInfo = manifest.GetMuxedStreams().OrderByDescending(s => s.VideoQuality.MaxHeight).FirstOrDefault();
+
+                if (streamInfo == null) return null;
+
+                // Temporary file for downloading initialization
+                var tempPath = Path.GetTempFileName();
+
+                // Downloading video
+                await _youtube.Videos.Streams.DownloadAsync(streamInfo, tempPath);
+
+                // Gave the stream
+                var fileStream = File.OpenRead(tempPath);
+                fileStream.Position = 0;
+
+                return fileStream;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
                 return null;
             }
         }

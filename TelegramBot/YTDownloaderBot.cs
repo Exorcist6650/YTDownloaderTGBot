@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -19,6 +20,8 @@ namespace TelegramBot
         private readonly ConsoleLogger _consoleLogger;
         private readonly TelegramLogger _telegramLogger;
 
+        // Fields
+
         public YTDownloaderBot(Host host, YoutubeReciever ytReciever, ConsoleLogger consoleLogger, TelegramLogger telegramLogger)
         {
             // Binding
@@ -29,6 +32,8 @@ namespace TelegramBot
 
             // Events
             _host.OnMessage += OnUserSendMessage;
+
+            // Fields init
         }
 
         public void Init()
@@ -45,11 +50,41 @@ namespace TelegramBot
                 await _telegramLogger.Log("Send youtube video link", client, update.Message.Chat.Id);
                 return;
             }
-            client.DeleteMessage(update.Message.Chat.Id, update.Message.Id);
 
+            // Delete user message
+            await client.DeleteMessage(update.Message.Chat.Id, update.Message.Id);
 
             // Loading and sending info
-            await LoadAndSendPreviewInfo(client, update);
+            if (await LoadAndSendPreviewInfo(client, update))
+            {
+                // Loading message for user
+                var LoadingVideoMessage = _telegramLogger?.Log("Video has started download...", client, update.Message.Chat.Id);
+
+                // Load video
+                using var fileStream = await _ytReciever.GetVideoMuxedStreamAsync(update.Message.Text);
+                if (fileStream != null)
+                {
+                    var inputFile = InputFile.FromStream(fileStream, "Video.mp4");
+                    if (inputFile != null)
+                    {
+                        try
+                        {
+                            // Sending video to chat
+                            await client.SendVideo(update.Message.Chat.Id, inputFile, $"@{_host.Me.Username}");
+                            _consoleLogger.Log("Video send sucсessfully");
+                        }
+                        catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
+                        {
+                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        }
+                        catch (Exception ex)
+                        {
+                            _telegramLogger?.Log(ex.Message, client, update.Message.Chat.Id, LogStatus.Error);
+                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        }
+                    }
+                }
+            }
         }
 
 
@@ -79,6 +114,7 @@ namespace TelegramBot
                     try
                     {
                         await client.SendPhoto(chatID, InputFile.FromStream(memoryStream), textCaption);
+                        _consoleLogger.Log("Preview sending sucсessfully");
                     }
                     catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
                     {
@@ -88,6 +124,7 @@ namespace TelegramBot
                     {
                         _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
                     }
+
                     return true;
                 }
                 else
@@ -99,7 +136,7 @@ namespace TelegramBot
             }
             else
             {
-                await _telegramLogger.Log("It's not a link", client, chatID);
+                await _telegramLogger.Log("Cannot download this. Please, send a link to youtube video", client, chatID);
                 return false;
             }
         }

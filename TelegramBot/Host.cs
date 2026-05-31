@@ -7,20 +7,24 @@ namespace TelegramBot
     public class Host
     {
         public Action<ITelegramBotClient, Update>? OnMessage; // Event
+
+        // Fields
         private readonly TelegramBotClient _bot; // Bot instance
         private readonly ConsoleLogger _consoleLogger;
 
-        // Ctor
+        public User Me { get; private set; } // Bot info
+
         public Host(string token, ConsoleLogger consoleLogger)
         {
             _bot = new TelegramBotClient(token);
             _consoleLogger = consoleLogger;
         }
 
-        public void Start()
+        public async void Start()
         {
             _bot.StartReceiving(UpdateHandler, ErrorHandler);
-            Console.WriteLine("Start receiving");
+            Me = await _bot.GetMe();
+            _consoleLogger.Log("Start receiving");
         }
 
         // Handlers update methods
@@ -42,12 +46,7 @@ namespace TelegramBot
             await Task.CompletedTask;
         }
 
-        // Public methods
-        public async Task SendMessage(ChatId chatId, string message)
-        {
-            _bot?.SendMessage(chatId, message);
-            await Task.CompletedTask;
-        }
+        public async Task<User> GetMe() => await _bot.GetMe();
 
     }
 }
