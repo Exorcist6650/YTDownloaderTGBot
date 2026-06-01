@@ -9,6 +9,7 @@ using Telegram.Bot.Types;
 using YoutubeExplode;
 using YoutubeExplode.Exceptions;
 using YoutubeExplode.Common;
+using TelegramBot;
 
 namespace YoutubeConnect
 {
@@ -37,6 +38,7 @@ namespace YoutubeConnect
     {
         private readonly YoutubeClient _youtube;
         static private readonly HttpClient _httpClient;
+        private readonly ConsoleLogger _consoleLogger;
 
         static YoutubeReciever()
         {
@@ -46,6 +48,7 @@ namespace YoutubeConnect
         public YoutubeReciever()
         {
             _youtube = new YoutubeClient();
+            _consoleLogger = new ConsoleLogger();
         }
 
         public async Task<VideoInfo?> GetVideoInfoAsync(string url)
@@ -130,7 +133,37 @@ namespace YoutubeConnect
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                _consoleLogger.Log(ex.Message, LogStatus.Error);
+                return null;
+            }
+        }
+
+        public async Task<FileStream?> GetAudioStreamAsync(string url)
+        {
+            try
+            {
+                // Get manifest 
+                var manifest = await _youtube.Videos.Streams.GetManifestAsync(url);
+                // Select high quality
+                var audioStreamInfo = manifest.GetAudioStreams().OrderByDescending(s => s.Bitrate).FirstOrDefault();
+
+                if (audioStreamInfo == null) return null;
+
+                // Temporary file for downloading initialization
+                var tempPath = Path.GetTempFileName();
+
+                // Downloading video
+                await _youtube.Videos.Streams.DownloadAsync(audioStreamInfo, tempPath);
+
+                // Gave the stream
+                var fileStream = File.OpenRead(tempPath);
+                fileStream.Position = 0;
+
+                return fileStream;
+            }
+            catch (Exception ex)
+            {
+                _consoleLogger.Log(ex.Message, LogStatus.Error);
                 return null;
             }
         }

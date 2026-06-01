@@ -6,7 +6,9 @@ namespace TelegramBot
 {
     public class Host
     {
-        public Action<ITelegramBotClient, Update>? OnMessage; // Event
+        // Events
+        public Action<ITelegramBotClient, Update>? OnMessage; 
+        public Action<ITelegramBotClient, CallbackQuery>? OnCallback; 
 
         // Fields
         private readonly TelegramBotClient _bot; // Bot instance
@@ -30,15 +32,25 @@ namespace TelegramBot
         // Handlers update methods
         private async Task UpdateHandler(ITelegramBotClient client, Update update, CancellationToken token)
         {
-            // Logging
-            string logText = $"User message: {update.Message?.Text}" +
-                $"\t Username: {update.Message.Chat.Username}" +
-                $"\t UserID: {update.Message.Chat.Id}";
-            _consoleLogger.Log(logText);
+            // Buttons callback
+            if (update.Type == Telegram.Bot.Types.Enums.UpdateType.CallbackQuery)
+            {
+                OnCallback?.Invoke(client, update.CallbackQuery);
+                await Task.CompletedTask;
+            }
+            // Standart message
+            else
+            {
+                // Logging
+                string logText = $"User message: {update.Message?.Text}" +
+                    $"\t Username: {update.Message.Chat.Username}" +
+                    $"\t UserID: {update.Message.Chat.Id}";
+                _consoleLogger.Log(logText);
 
-            // Event calling
-            OnMessage?.Invoke(client, update);
-            await Task.CompletedTask;
+                // Event calling
+                OnMessage?.Invoke(client, update);
+                await Task.CompletedTask;
+            }
         }
         private async Task ErrorHandler(ITelegramBotClient client, Exception exception, HandleErrorSource source, CancellationToken token)
         {
