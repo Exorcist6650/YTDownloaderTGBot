@@ -80,7 +80,7 @@ namespace TelegramBot
             var chatId = cb?.Message?.Chat.Id ?? 0;
             var caption = cb?.Message?.Caption ?? string.Empty;
 
-            // Parcing url 
+            // Parsing url 
             string key = "\nLINK: ";
             var prefix = caption.IndexOf(key);
             if (prefix != -1)
@@ -149,8 +149,15 @@ namespace TelegramBot
                     // Sending to chat
                     try
                     {
+
                         // Telegram message with buttons
-                        await client.SendPhoto(chatId, InputFile.FromStream(memoryStream), textCaption, replyMarkup: _inlineKeyboard);
+                        await client.SendPhoto(
+                            chatId, 
+                            InputFile.FromStream(memoryStream), 
+                            textCaption, 
+                            replyMarkup: _inlineKeyboard
+                        );
+
                         _consoleLogger.Log("Preview sending sucсessfully");
                     }
                     catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
@@ -180,8 +187,8 @@ namespace TelegramBot
 
         private async Task LoadAndSendMuxedVideoAsync(ITelegramBotClient client, ChatId chatId, string url)
         {
-            // Load video
-            var videoPath = await _ytReciever.LoadVideoMuxedStreamAsync(url);
+            // Temp file path
+            var videoPath = await _ytReciever.LoadTempVideoMuxedAsync(url);
 
             if (videoPath != null)
             {
@@ -192,37 +199,30 @@ namespace TelegramBot
                 {
                     if (fileStream.Length / 1024 <= 49_500)
                     {
-
-                        var inputFile = InputFile.FromStream(fileStream, "Video");
-                        if (inputFile != null)
+                        try
                         {
-                            try
-                            {
-                                // Sending video to chat
-                                await client.SendVideo(
-                                    chatId,
-                                    new InputFileStream(fileStream, "Video"),
-                                    caption: $"@{_host.Me.Username}",
-                                    supportsStreaming: true
-                                );
+                            // Sending video to chat
+                            await client.SendVideo(
+                                chatId,
+                                new InputFileStream(fileStream, "Video"),
+                                caption: $"@{_host.Me.Username}",
+                                supportsStreaming: true
+                            );
 
-                                _consoleLogger.Log("Video send sucсessfully");
-                            }
-                            catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
-                            {
-                                _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
-                            }
-                            catch (Exception ex)
-                            {
-                                _telegramLogger?.Log(ex.Message, client, chatId, LogStatus.Error);
-                                _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
-                            }
+                            _consoleLogger.Log("Video send sucсessfully");
                         }
-                        else
-                            _consoleLogger.Log($"Video convertation from stream failed", LogStatus.Error);
+                        catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
+                        {
+                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        }
+                        catch (Exception ex)
+                        {
+                            _telegramLogger?.Log(ex.Message, client, chatId, LogStatus.Error);
+                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        }
                     }
                     else
-                        _telegramLogger?.Log("File must be less than 50mb", client, chatId);
+                        _telegramLogger?.Log("Video limit is 50mb", client, chatId);
                 }
                 else
                     _consoleLogger.Log($"Video stream is null", LogStatus.Error);
@@ -235,48 +235,56 @@ namespace TelegramBot
             if (File.Exists(videoPath))
                 File.Delete(videoPath);
         }
-        private async Task<bool> LoadAndSendingAudioAsync(ITelegramBotClient client, ChatId chatId, string url)
+        private async Task LoadAndSendingAudioAsync(ITelegramBotClient client, ChatId chatId, string url)
         {
-            // Load video
-            using var fileStream = await _ytReciever.GetAudioStreamAsync(url);
-            if (fileStream != null)
-            {
-                // Loading info for file name
-                var videoInfo = await _ytReciever.GetVideoInfoAsync(url);
+            // Temp file path
+            var audioPath = await _ytReciever.LoadTempAudioAsync(url);
 
-                var inputFile = InputFile.FromStream(fileStream, videoInfo?.Title ?? "Unknown");
-                if (inputFile != null)
+            if (audioPath != null)
+            {
+                // Open file stream
+                using var fileStream = new FileStream(audioPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+                if (fileStream != null)
                 {
-                    try
+                    if (fileStream.Length / 1024 <= 49_500)
                     {
-                        // Sending audio to chat
-                        await client.SendAudio(chatId, inputFile, $"@{_host.Me.Username}");
-                        _consoleLogger.Log("Audio send sucсessfully");
-                        return true;
+                        // Loading info for file name
+                        var videoInfo = await _ytReciever.GetVideoInfoAsync(url);
+
+                        try
+                        {
+                            // Sending audio to chat
+                            await client.SendAudio(
+                                chatId, 
+                                new InputFileStream(fileStream, videoInfo?.Title ?? "Unknown"), 
+                                caption: $"@{_host.Me.Username}"
+                            );
+
+                            _consoleLogger.Log("Audio send sucсessfully");
+                        }
+                        catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
+                        {
+                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        }
+                        catch (Exception ex)
+                        {
+                            _telegramLogger?.Log(ex.Message, client, chatId, LogStatus.Error);
+                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        }
                     }
-                    catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
-                    {
-                        _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
-                        return false;
-                    }
-                    catch (Exception ex)
-                    {
-                        _telegramLogger?.Log(ex.Message, client, chatId, LogStatus.Error);
-                        _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
-                        return false;
-                    }
+                    else
+                        _telegramLogger?.Log("Audio limit is 50mb", client, chatId);
                 }
                 else
-                {
-                    _consoleLogger.Log($"Audio convertation from stream failed", LogStatus.Error);
-                    return false;
-                }
+                    _consoleLogger.Log($"Audio stream is null", LogStatus.Error);
             }
             else
-            {
-                _consoleLogger.Log($"Audio stream is null", LogStatus.Error);
-                return false;
-            }
+                _consoleLogger.Log($"Audio path is null", LogStatus.Error);
+
+            // Deleting audio file
+            if (File.Exists(audioPath))
+                File.Delete(audioPath);
         }
     }
 }

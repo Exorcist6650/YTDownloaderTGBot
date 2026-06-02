@@ -36,8 +36,8 @@ namespace TelegramBot
         // Handlers update methods
         private async Task UpdateHandler(ITelegramBotClient client, Update update, CancellationToken token)
         {
-            var message = update.Message;
-            var chatId = update.Message?.Chat.Id ?? 0;
+            var message = update?.Message;
+            var chatId = update?.Message?.Chat.Id ?? 0;
 
             // Buttons callback
             if (update?.Type == Telegram.Bot.Types.Enums.UpdateType.CallbackQuery)

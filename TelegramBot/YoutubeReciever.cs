@@ -113,7 +113,7 @@ namespace YoutubeConnect
         /// <returns>
         /// Path to loaded video
         /// </returns>
-        public async Task<string?> LoadVideoMuxedStreamAsync(string url)
+        public async Task<string?> LoadTempVideoMuxedAsync(string url)
         {
             // Temporary file path for downloading
             var tempPath = Path.GetTempFileName();
@@ -140,8 +140,10 @@ namespace YoutubeConnect
             }
         }
 
-        public async Task<FileStream?> GetAudioStreamAsync(string url)
+        public async Task<string?> LoadTempAudioAsync(string url)
         {
+            // Temporary file path for downloading
+            var tempPath = Path.GetTempFileName();
             try
             {
                 // Get manifest 
@@ -151,21 +153,15 @@ namespace YoutubeConnect
 
                 if (audioStreamInfo == null) return null;
 
-                // Temporary file for downloading initialization
-                var tempPath = Path.GetTempFileName();
-
-                // Downloading video
+                // Downloading audio
                 await _youtube.Videos.Streams.DownloadAsync(audioStreamInfo, tempPath);
 
-                // Open file stream
-                var fileStream = new FileStream(tempPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                fileStream.Position = 0;
-
-                return fileStream;
+                return tempPath;
             }
             catch (Exception ex)
             {
                 _consoleLogger.Log(ex.Message, LogStatus.Error);
+                File.Delete(tempPath);
                 return null;
             }
         }
