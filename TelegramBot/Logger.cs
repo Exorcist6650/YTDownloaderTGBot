@@ -33,12 +33,27 @@ namespace TelegramBot
         /// <param name="chatID"></param>
         /// <param name="status"></param>
         /// <returns>
-        /// Return a bot message
+        /// Return a bot message reference
         /// </returns>
-        public async Task<Message> Log(string message, ITelegramBotClient client, ChatId chatID, LogStatus status = LogStatus.Message)
+        public async Task<Message?> Log(string message, ITelegramBotClient client, ChatId chatID, LogStatus status = LogStatus.Message)
         {
-            return await client.SendMessage(chatID, status == LogStatus.Message ? message 
-                : $"{DateTime.UtcNow} | {message} | {status}");
+            try
+            {
+                var bot_message = await client.SendMessage(chatID, status == LogStatus.Message ? message
+                    : $"{DateTime.UtcNow} | {message} | {status}");
+                return bot_message;
+            }
+            catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
+            {
+                Console.WriteLine($"Exception: {ex.Message}", LogStatus.Error);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception: {ex.Message}", LogStatus.Error);
+                return null;
+            }
+
         }
     }
 }

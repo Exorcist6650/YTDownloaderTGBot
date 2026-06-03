@@ -1,16 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
-using AngleSharp.Dom;
+﻿using TagLib;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using YoutubeConnect;
-using YoutubeExplode.Videos.Streams;
 
 namespace TelegramBot
 {
@@ -98,20 +90,44 @@ namespace TelegramBot
                         await LoadAndSendMuxedVideoAsync(client, chatId, videoUrl);
 
                         // Deleting message for user
-                        await client.DeleteMessage(chatId, LoadingVideoMessage.Id);
+                        try
+                        {
+                            if (LoadingVideoMessage != null)
+                                await client.DeleteMessage(chatId, LoadingVideoMessage.Id);
+                        }
+                        catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
+                        {
+                            _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
+                        }
+                        catch (Exception ex)
+                        {
+                            _consoleLogger.Log($"Excertion: {ex.Message}", LogStatus.Error);
+                        }
                         break;
 
 
                     // User download audio
                     case "action:audio":
                         // Loading message for user
-                        var LoadingAudioMessage = await _telegramLogger.Log("Video has started download...", client, chatId);
+                        var LoadingAudioMessage = await _telegramLogger.Log("Audio has started download...", client, chatId);
 
                         // Loading and sending audio
                         await LoadAndSendingAudioAsync(client, chatId, videoUrl);
 
                         // Deleting message for user
-                        await client.DeleteMessage(chatId, LoadingAudioMessage.Id);
+                        try
+                        {
+                            if (LoadingAudioMessage != null)
+                                await client.DeleteMessage(chatId, LoadingAudioMessage.Id);
+                        }
+                        catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
+                        {
+                            _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
+                        }
+                        catch (Exception ex)
+                        {
+                            _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
+                        }
                         break;
 
 
@@ -152,9 +168,9 @@ namespace TelegramBot
 
                         // Telegram message with buttons
                         await client.SendPhoto(
-                            chatId, 
-                            InputFile.FromStream(memoryStream), 
-                            textCaption, 
+                            chatId,
+                            InputFile.FromStream(memoryStream),
+                            textCaption,
                             replyMarkup: _inlineKeyboard
                         );
 
@@ -162,11 +178,11 @@ namespace TelegramBot
                     }
                     catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
                     {
-                        _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
                     }
                     catch (Exception ex)
                     {
-                        _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                        _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
                     }
 
                     return true;
@@ -213,12 +229,12 @@ namespace TelegramBot
                         }
                         catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
                         {
-                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                            _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
                         }
                         catch (Exception ex)
                         {
                             _telegramLogger?.Log(ex.Message, client, chatId, LogStatus.Error);
-                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                            _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
                         }
                     }
                     else
@@ -232,8 +248,8 @@ namespace TelegramBot
                 _consoleLogger.Log($"Video path is null", LogStatus.Error);
 
             // Deleting video file
-            if (File.Exists(videoPath))
-                File.Delete(videoPath);
+            if (System.IO.File.Exists(videoPath))
+                System.IO.File.Delete(videoPath);
         }
         private async Task LoadAndSendingAudioAsync(ITelegramBotClient client, ChatId chatId, string url)
         {
@@ -249,15 +265,20 @@ namespace TelegramBot
                 {
                     if (fileStream.Length / 1024 <= 49_500)
                     {
-                        // Loading info for file name
+                        // Loading video info 
                         var videoInfo = await _ytReciever.GetVideoInfoAsync(url);
 
+                        // Set audio cover
+                        var videoPreview = await _ytReciever.GetVideoPreviewStreamAsync(url);
+                        if (videoPreview != null)
+                            SetAudioCover(audioPath, videoPreview);
+                         
                         try
                         {
                             // Sending audio to chat
                             await client.SendAudio(
-                                chatId, 
-                                new InputFileStream(fileStream, videoInfo?.Title ?? "Unknown"), 
+                                chatId,
+                                new InputFileStream(fileStream, videoInfo?.Title ?? "Unknown"),
                                 caption: $"@{_host.Me.Username}"
                             );
 
@@ -265,12 +286,12 @@ namespace TelegramBot
                         }
                         catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
                         {
-                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                            _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
                         }
                         catch (Exception ex)
                         {
                             _telegramLogger?.Log(ex.Message, client, chatId, LogStatus.Error);
-                            _consoleLogger.Log($"Exceprtion: {ex.Message}", LogStatus.Error);
+                            _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
                         }
                     }
                     else
@@ -283,8 +304,31 @@ namespace TelegramBot
                 _consoleLogger.Log($"Audio path is null", LogStatus.Error);
 
             // Deleting audio file
-            if (File.Exists(audioPath))
-                File.Delete(audioPath);
+            if (System.IO.File.Exists(audioPath))
+                System.IO.File.Delete(audioPath);
+        }
+        private void SetAudioCover(string audioPath, MemoryStream streamCover)
+        {
+            if (System.IO.File.Exists(audioPath))
+            {
+
+                byte[] coverBytes;
+                coverBytes = streamCover.ToArray();
+
+
+                var tfile = TagLib.File.Create(audioPath);
+                tfile.Tag.Pictures =
+                [
+                    new Picture
+                {
+                    Type = PictureType.FrontCover,
+                    Description = "Cover",
+                    MimeType = "image/jpeg",
+                    Data = new ByteVector(coverBytes)
+                }
+                ];
+                tfile.Save();
+            }
         }
     }
 }

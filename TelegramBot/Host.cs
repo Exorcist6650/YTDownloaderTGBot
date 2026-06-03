@@ -36,8 +36,8 @@ namespace TelegramBot
         // Handlers update methods
         private async Task UpdateHandler(ITelegramBotClient client, Update update, CancellationToken token)
         {
-            var message = update?.Message;
-            var chatId = update?.Message?.Chat.Id ?? 0;
+            var message = update.Message;
+            var chatId = update.Message?.Chat.Id;
 
             // Buttons callback
             if (update?.Type == Telegram.Bot.Types.Enums.UpdateType.CallbackQuery)
@@ -64,7 +64,18 @@ namespace TelegramBot
                     OnMessage?.Invoke(client, update);
 
                 // Delete user message
-                await client.DeleteMessage(chatId, message?.Id ?? 0);
+                try
+                {
+                    await client.DeleteMessage(chatId, message?.Id ?? 0);
+                }
+                catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 403)
+                {
+                    _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
+                }
+                catch (Exception ex)
+                {
+                    _consoleLogger.Log($"Exception: {ex.Message}", LogStatus.Error);
+                }
             }
 
         }
