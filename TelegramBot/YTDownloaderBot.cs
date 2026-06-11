@@ -57,7 +57,7 @@ namespace TelegramBot
 
             if (userMessage == "/start")
             {
-                await _telegramLogger.Log("Send youtube video link", client, chatId);
+                await _telegramLogger.Log("Send youtube or tiktok video link", client, chatId);
                 return;
             }
 

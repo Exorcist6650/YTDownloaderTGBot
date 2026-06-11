@@ -8,6 +8,13 @@ using System.Threading.Tasks;
 
 namespace TelegramBot
 {
+    public enum DownloadType : byte
+    {
+        Video,
+        Audio,
+    }
+
+
     public class DownloadManager
     {
         // Dependencies
@@ -21,21 +28,42 @@ namespace TelegramBot
             // Dependencies
             _consoleLogger = new ConsoleLogger();
 
+            // Checking yt-dlp existing
             if (File.Exists(ytdlpPath))
                 _consoleLogger.Log("yt-dlp was found successfully");
             else
                 _consoleLogger.Log("yt-dlp does not exist in directory", LogStatus.Error);
         }
 
-        public async Task<int> DownloadVideoAsync(string url)
+        public async Task<string> DownloadFileAsync(string url, DownloadType downloadType)
         {
             string outputTemplate = Path.Combine(Path.GetTempPath(), "%(title)s.%(ext)s");
 
             // Empty url
             if (string.IsNullOrWhiteSpace(url)) throw new ArgumentException("URL required", nameof(url));
 
-            string args = $"-f b -o\"{outputTemplate}\" --newline \"{url}\"";
+            // Arguments for downloading
+            string args = string.Empty;
 
+            switch (downloadType)
+            {
+                case DownloadType.Video:
+                    args = $"--no-playlist --newline -f b -o\"{outputTemplate}\" \"{url}\"";
+                    break;
+                case DownloadType.Audio:
+                    args = $"--no-playlist --newline --extract-audio --audio-format mp3 -f bestaudio,best -o\"{outputTemplate}\" \"{url}\"";
+                    break;
+            }
+
+            // Download run
+            await RunProcessDownloadingAsync(args);
+            
+            // Return a reference to dowmloaded file
+            return outputTemplate;
+        }
+
+        private async Task<int> RunProcessDownloadingAsync(string args)
+        {
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = ytdlpPath,
@@ -51,11 +79,14 @@ namespace TelegramBot
             using var process = new Process() { StartInfo = processStartInfo, EnableRaisingEvents = true };
 
             // Events for logging 
-            process.OutputDataReceived += (sender, e) => 
+            process.OutputDataReceived += (sender, e) =>
             { if (e.Data != null) _consoleLogger.Log(e.Data); };
 
-            process.ErrorDataReceived += (sender, e) => 
+            process.ErrorDataReceived += (sender, e) =>
             { if (e.Data != null) _consoleLogger.Log(e.Data, LogStatus.Error); };
+
+            process.Exited += (sender, e) =>
+            { _consoleLogger.Log($"{process.ExitCode}"); process.Dispose(); };
 
             // Running
             process.Start();
@@ -63,8 +94,8 @@ namespace TelegramBot
             process.BeginErrorReadLine();
 
             await process.WaitForExitAsync();
-            
-            return 0;
+
+            return process.ExitCode;
         }
     };
 }

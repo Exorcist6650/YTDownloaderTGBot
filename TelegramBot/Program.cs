@@ -33,36 +33,11 @@ namespace MyApp
                 new TelegramLogger());
 
             YTBot.Init(); // Bot recieving start
+            var dm = new DownloadManager();
+            dm.DownloadFileAsync("https://vt.tiktok.com/ZSQyaRVXS", DownloadType.Audio);
 
             Console.ReadLine();
         }
-
         
-        private static async void LoadVideoDataAsync(ITelegramBotClient client, Update update)
-        {
-            var ytReciever = new YoutubeReciever();
-
-            VideoInfo? videoInfo = await ytReciever.GetVideoInfoAsync(update.Message.Text);
-
-            
-            if (videoInfo != null)
-            {
-                // Loading vidoe preview
-                using var imageStream = await ytReciever.GetVideoPreviewStreamAsync(update.Message.Text);
-                
-                if (imageStream != null)
-                {
-                    var videoPreview = InputFile.FromStream(imageStream);
-
-                    // Send message video info with picture
-                    await client.SendPhoto(update.Message.Chat.Id, videoPreview, caption:
-                        $"{videoInfo?.Title}\n{videoInfo?.Channel}\n{videoInfo?.Duration}\n{videoInfo?.Description[..512]}...");
-                }
-                else
-                    await client.SendMessage(update.Message.Chat.Id, "Error occurred while download video data");
-            }
-            else
-                await client.SendMessage(update.Message.Chat.Id, "It's not a video link!");
-        }
     }
 }
